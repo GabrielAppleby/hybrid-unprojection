@@ -122,35 +122,58 @@ def main():
     high_d_joint_of_neighbors = high_d_conditional_to_joint(high_d_conditional_of_neighbors)
 
     optimizer = tf.keras.optimizers.Adam()
-    kld_loss = tf.keras.losses.KLDivergence()
-    mse_loss = tf.keras.losses.MeanSquaredError()
+    kld_loss_fn = tf.keras.losses.KLDivergence()
+    mse_loss_fn = tf.keras.losses.MeanSquaredError()
 
     low_d_representation = tf.Variable(
         tf.initializers.RandomNormal(stddev=.001)(shape=[n, 2], dtype=tf.float32))
     #
     model = tf.keras.Sequential()
-    model.add(tf.keras.layers.Dense(2048, activation=tf.nn.relu))
-    model.add(tf.keras.layers.Dense(2048, activation=tf.nn.relu))
-    model.add(tf.keras.layers.Dense(2048, activation=tf.nn.relu))
+    model.add(tf.keras.layers.Dense(32, activation=tf.nn.relu))
+    model.add(tf.keras.layers.Dense(128, activation=tf.nn.relu))
+    model.add(tf.keras.layers.Dense(256, activation=tf.nn.relu))
     model.add(tf.keras.layers.Dense(d, activation=tf.nn.sigmoid))
 
     @tf.function
     def train():
-        for epoch in range(10000):
-            with tf.GradientTape(persistent=True) as tape:
-                low_d_joint_of_neighbors = estimate_low_d_joint_of_neighbors(low_d_representation)
-                reconstruction = model(low_d_joint_of_neighbors)
-                tsne_loss = kld_loss(high_d_joint_of_neighbors, low_d_joint_of_neighbors)
-                reconstruction_loss = mse_loss(x, reconstruction)
+        with tf.GradientTape(persistent=True) as tape:
+            low_d_joint_of_neighbors = estimate_low_d_joint_of_neighbors(low_d_representation)
+            reconstruction = model(low_d_joint_of_neighbors)
+            tsne_loss = kld_loss_fn(high_d_joint_of_neighbors, low_d_joint_of_neighbors)
+            reconstruction_loss = mse_loss_fn(x, reconstruction)
 
-            var_list = [low_d_representation] + model.trainable_weights
-            grads = tape.gradient([tsne_loss, reconstruction_loss], var_list)
-            if epoch % 1000 == 0:
-                print(epoch)
-            optimizer.apply_gradients(zip(grads, var_list))
+        var_list = [low_d_representation] + model.trainable_weights
+        grads = tape.gradient([tsne_loss, reconstruction_loss], var_list)
+        tf.print(tape.gradient([tsne_loss, reconstruction_loss], model.trainable_weights))
+        tf.print(tape.gradient([tsne_loss], model.trainable_weights))
+        tf.print(tape.gradient([reconstruction], model.trainable_weights))
+        optimizer.apply_gradients(zip(grads, var_list))
+        return low_d_representation, reconstruction
 
-    train()
-    show_scatters(low_d_representation, y, "tsne_scatter")
+    for epoch in range(10000):
+        low_d, reconstruction = train()
+        exit()
+        if epoch % 1000 == 0:
+            print(epoch)
+            show_scatters(low_d, y, "tsne_scatter" + str(epoch))
+    show_images(reconstruction[0:15].numpy(), "reconstructions")
+    show_images(x[0:15], "originals")
+
+
+def show_images(images: np.array, name: str) -> None:
+    """
+    Plots an MNIST image.
+    :param images: An MNIST image.
+    :param name: The name to save it under.
+    :return: None, the images are saved as a side effect.
+    """
+    plt.gray()
+    fig = plt.figure(figsize=(16, 7))
+    for i in range(0, 15):
+        ax = fig.add_subplot(3, 5, i + 1)
+        ax.matshow(images[i].reshape((28, 28)).astype(float))
+    plt.savefig(name)
+    plt.clf()
 
 
 def show_scatters(projections: np.array, labels, name: str) -> None:
