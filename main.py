@@ -78,7 +78,6 @@ def estimate_sigmas(distances,
 
 
 def estimate_high_d_conditional_of_neighbors(x):
-    # -((|| x_i - x_j ||)^2)
     distances = -squared_pairwise_distance(x)
     sigmas = estimate_sigmas(distances)
     sigmas_squared_times_two = 2. * tf.square(sigmas)
